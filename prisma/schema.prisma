@@ -1,0 +1,158 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    output = "/home/ubuntu/lightreach_m1_app/nextjs_space/node_modules/.prisma/client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  password      String
+  role          String    @default("installer")
+  company       String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  submissions   PhotopackSubmission[]
+}
+
+model PhotoCategory {
+  id               Int      @id @default(autoincrement())
+  categoryName     String
+  subcategoryName  String
+  milestoneType    String
+  displayOrder     Int      @default(0)
+  isRequired       Boolean  @default(true)
+  minPhotos        Int      @default(1)
+  maxPhotos        Int      @default(10)
+  requirements     String?
+  examples         String?
+  aiPrompt         String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([categoryName, subcategoryName, milestoneType])
+  @@index([categoryName, subcategoryName, milestoneType])
+  @@map("photo_categories")
+}
+
+model ApprovedPhoto {
+  id               String   @id @default(cuid())
+  customerName     String
+  milestoneType    String
+  displayCategory  String
+  subcategory      String
+  originalName     String
+  filePath         String
+  fileSizeKb       Float    @default(0)
+  isReference      Boolean  @default(false)
+  cloudStoragePath String?
+  isPublic         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  matchedPhotos    SubmissionPhoto[] @relation("MatchedReference")
+
+  @@index([displayCategory, subcategory])
+  @@index([milestoneType])
+  @@map("approved_photos")
+}
+
+model PhotopackSubmission {
+  id                  String   @id @default(cuid())
+  customerName        String
+  accountId           String?
+  installerName       String
+  milestoneType       String
+  status              String   @default("draft")
+  overallConfidence    Float?
+  totalPhotos         Int      @default(0)
+  categoriesComplete  Int      @default(0)
+  categoriesRequired  Int      @default(0)
+  issuesFound         Int      @default(0)
+  reviewerNotes       String?
+  sourceUrl           String?
+  externalId          String?
+  expectedCategories  Json     @default("[]")
+  schProjectId        Int?
+  soldEquipment       Json?
+  designCadFiles      Json?
+  arrayCount          Int?
+  arrayCountSource    String?
+  userId              String
+  user                User     @relation(fields: [userId], references: [id])
+  photos              SubmissionPhoto[]
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([status])
+  @@index([userId])
+  @@map("photopack_submissions")
+}
+
+model SubmissionPhoto {
+  id                String   @id @default(cuid())
+  submissionId      String
+  submission        PhotopackSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  cloudStoragePath  String
+  isPublic          Boolean  @default(false)
+  originalName      String?
+  sourcePhotoUrl    String?
+  expectedLabel     String?
+  category          String
+  subcategory       String
+  analysisResult    Json     @default("{}")
+  confidenceScore   Float?
+  qualityScore      Float?
+  issuesFound       String[]
+  isAcceptable      Boolean?
+  matchedReferenceId String?
+  matchedReference  ApprovedPhoto? @relation("MatchedReference", fields: [matchedReferenceId], references: [id])
+  similarityScore   Float?
+  reviewerNotes     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([submissionId])
+  @@index([category, subcategory])
+  @@map("submission_photos")
+}
+
+model RejectionPattern {
+  id              Int      @id @default(autoincrement())
+  category        String
+  subcategory     String?
+  patternName     String
+  description     String
+  severity        String   @default("medium")
+  frequency       Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@map("rejection_patterns")
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  action      String
+  entityType  String
+  entityId    String?
+  details     Json     @default("{}")
+  performedBy String   @default("system")
+  createdAt   DateTime @default(now())
+
+  @@index([action])
+  @@index([entityType, entityId])
+  @@map("audit_log")
+}
