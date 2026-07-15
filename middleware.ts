@@ -9,7 +9,7 @@ import { getToken } from "next-auth/jwt";
  * this is a public site, every page and API route requires a signed-in
  * session, except the login/signup/auth endpoints themselves.)
  */
-const PUBLIC_API_PREFIXES = ["/api/auth", "/api/signup"];
+const PUBLIC_API_PREFIXES = ["/api/auth", "/api/signup", "/api/admin/bootstrap"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
