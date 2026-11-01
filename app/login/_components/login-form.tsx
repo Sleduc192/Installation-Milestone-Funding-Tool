@@ -16,6 +16,15 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ email: "", password: "", name: "", company: "" });
 
+  const goAfterLogin = () => {
+    const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl");
+    if (callbackUrl && callbackUrl.startsWith("/") && !callbackUrl.startsWith("//")) {
+      window.location.assign(callbackUrl);
+      return;
+    }
+    router.replace("/dashboard");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -30,7 +39,7 @@ export default function LoginForm() {
         if (res?.error) {
           toast.error("Invalid email or password");
         } else {
-          router.replace("/dashboard");
+          goAfterLogin();
         }
       } else {
         const res = await fetch("/api/signup", {
@@ -51,7 +60,7 @@ export default function LoginForm() {
             toast.error("Account created but login failed. Please sign in.");
             setIsLogin(true);
           } else {
-            router.replace("/dashboard");
+            goAfterLogin();
           }
         }
       }
