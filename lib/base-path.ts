@@ -11,6 +11,7 @@ export function withBasePath(path: string): string {
   if (!path.startsWith("/") || path.startsWith("//")) return path;
   const base = basePath();
   if (!base || path === base || path.startsWith(`${base}/`)) return path;
+  if (path === "/") return base;
   return `${base}${path}`;
 }
 

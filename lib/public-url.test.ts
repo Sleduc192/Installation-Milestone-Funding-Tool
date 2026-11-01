@@ -30,6 +30,7 @@ test("base path helpers are no-ops when unset", () => {
 
 test("base path prefixes root-relative paths once", () => {
   withEnv({ NEXT_PUBLIC_BASE_PATH: "/funding" }, () => {
+    assert.equal(withBasePath("/"), "/funding");
     assert.equal(withBasePath("/api/me"), "/funding/api/me");
     assert.equal(withBasePath("/funding/api/me"), "/funding/api/me");
     assert.equal(withBasePath("https://example.com/api"), "https://example.com/api");

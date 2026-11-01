@@ -33,6 +33,7 @@ export async function signHubTrust(
   exp: number,
   secret: string
 ): Promise<string> {
+  const key = secret.trim();
   const payload = JSON.stringify({
     email: user.email,
     name: user.name,
@@ -40,53 +41,88 @@ export async function signHubTrust(
   });
   const payloadPart = base64UrlEncode(new TextEncoder().encode(payload));
   const signed = `v1.${payloadPart}`;
-  const mac = await hmacSha256(secret, signed);
+  const mac = await hmacSha256(key, signed);
   return `${signed}.${base64UrlEncode(mac)}`;
+}
+
+export type HubTrustReason =
+  | "ok"
+  | "no-secret"
+  | "no-header"
+  | "malformed"
+  | "bad-signature"
+  | "expired"
+  | "bad-claims";
+
+/**
+ * Same check as readHubTrust, plus a reason safe to log.
+ * The reason never includes the token or the secret.
+ */
+export async function inspectHubTrust(
+  headerValue: string | null | undefined,
+  opts?: { secret?: string; now?: number }
+): Promise<{ user: HubUser | null; reason: HubTrustReason }> {
+  // Dynamic lookup so the bundler does not inline a missing build-time value.
+  const fromEnv = process.env["HUB_TRUST_SECRET"];
+  const secret = (opts?.secret ?? fromEnv ?? "").trim();
+  if (!secret) return { user: null, reason: "no-secret" };
+  if (!headerValue) return { user: null, reason: "no-header" };
+
+  const match = headerValue.trim().match(/^v1\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/);
+  if (!match) return { user: null, reason: "malformed" };
+
+  let provided: Uint8Array;
+  let payloadRaw: string;
+  try {
+    provided = base64UrlDecode(match[2]);
+    payloadRaw = new TextDecoder().decode(base64UrlDecode(match[1]));
+  } catch {
+    return { user: null, reason: "malformed" };
+  }
+
+  const signed = `v1.${match[1]}`;
+  const macSigned = await hmacSha256(secret, signed);
+  const macPayload = await hmacSha256(secret, payloadRaw);
+  const signatureOk =
+    fixedTimeEqual(macSigned, provided) ||
+    fixedTimeEqual(macPayload, provided) ||
+    hexEquals(macSigned, match[2]) ||
+    hexEquals(macPayload, match[2]);
+  if (!signatureOk) return { user: null, reason: "bad-signature" };
+
+  let parsed: { email?: unknown; name?: unknown; exp?: unknown };
+  try {
+    parsed = JSON.parse(payloadRaw);
+  } catch {
+    return { user: null, reason: "bad-claims" };
+  }
+
+  if (typeof parsed.email !== "string" || (typeof parsed.name !== "string" && parsed.name != null)) {
+    return { user: null, reason: "bad-claims" };
+  }
+  let exp = typeof parsed.exp === "number" ? parsed.exp : Number(parsed.exp);
+  if (!Number.isFinite(exp)) return { user: null, reason: "bad-claims" };
+  // Some signers pass Date.now() milliseconds instead of unix seconds.
+  if (exp > 10_000_000_000) exp = Math.floor(exp / 1000);
+
+  const email = parsed.email.trim();
+  const name = (typeof parsed.name === "string" ? parsed.name : "").trim();
+  if (!isEmail(email) || email.length > 320 || name.length > 200) return { user: null, reason: "bad-claims" };
+  if (/[\u0000-\u001f]/.test(name)) return { user: null, reason: "bad-claims" };
+
+  const nowSeconds = Math.floor((opts?.now ?? Date.now()) / 1000);
+  if (exp < nowSeconds - MAX_SKEW_SECONDS) return { user: null, reason: "expired" };
+  if (exp > nowSeconds + MAX_TTL_SECONDS) return { user: null, reason: "expired" };
+
+  return { user: { email, name }, reason: "ok" };
 }
 
 export async function readHubTrust(
   headerValue: string | null | undefined,
   opts?: { secret?: string; now?: number }
 ): Promise<HubUser | null> {
-  const secret = opts?.secret ?? process.env.HUB_TRUST_SECRET;
-  if (!secret || !headerValue) return null;
-
-  const parts = headerValue.split(".");
-  if (parts.length !== 3 || parts[0] !== "v1" || !parts[1] || !parts[2]) return null;
-
-  const signed = `v1.${parts[1]}`;
-  let provided: Uint8Array;
-  let payloadRaw: string;
-  try {
-    provided = base64UrlDecode(parts[2]);
-    payloadRaw = new TextDecoder().decode(base64UrlDecode(parts[1]));
-  } catch {
-    return null;
-  }
-
-  const expected = await hmacSha256(secret, signed);
-  if (!fixedTimeEqual(expected, provided)) return null;
-
-  let parsed: { email?: unknown; name?: unknown; exp?: unknown };
-  try {
-    parsed = JSON.parse(payloadRaw);
-  } catch {
-    return null;
-  }
-
-  if (typeof parsed.email !== "string" || typeof parsed.name !== "string") return null;
-  if (typeof parsed.exp !== "number" || !Number.isFinite(parsed.exp)) return null;
-
-  const email = parsed.email.trim();
-  const name = parsed.name.trim();
-  if (!isEmail(email) || email.length > 320 || name.length > 200) return null;
-  if (/[\u0000-\u001f]/.test(name)) return null;
-
-  const nowSeconds = Math.floor((opts?.now ?? Date.now()) / 1000);
-  if (parsed.exp < nowSeconds - MAX_SKEW_SECONDS) return null;
-  if (parsed.exp > nowSeconds + MAX_TTL_SECONDS) return null;
-
-  return { email, name };
+  const result = await inspectHubTrust(headerValue, opts);
+  return result.user;
 }
 
 function isEmail(value: string): boolean {
@@ -125,4 +161,11 @@ function fixedTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
   return diff === 0;
+}
+
+function hexEquals(mac: Uint8Array, presented: string): boolean {
+  if (!/^[0-9a-fA-F]+$/.test(presented) || presented.length !== mac.length * 2) return false;
+  const bytes = new Uint8Array(mac.length);
+  for (let i = 0; i < mac.length; i++) bytes[i] = Number.parseInt(presented.slice(i * 2, i * 2 + 2), 16);
+  return fixedTimeEqual(mac, bytes);
 }

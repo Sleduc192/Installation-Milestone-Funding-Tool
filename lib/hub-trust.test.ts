@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readHubTrust, signHubTrust } from "./hub-trust";
+import { inspectHubTrust, readHubTrust, signHubTrust } from "./hub-trust";
 
 const secret = "test-hub-secret";
 const now = Date.parse("2026-11-01T20:00:00Z");
@@ -44,6 +44,27 @@ test("missing header or secret fails closed", async () => {
   const exp = Math.floor(now / 1000) + 60;
   const token = await signHubTrust({ email: "ada@seamlesshome.com", name: "Ada" }, exp, secret);
   assert.equal(await readHubTrust(token, { secret: "", now }), null);
+});
+
+test("a secret with surrounding whitespace still matches", async () => {
+  const exp = Math.floor(now / 1000) + 60;
+  const token = await signHubTrust({ email: "ada@seamlesshome.com", name: "Ada" }, exp, secret);
+  const user = await readHubTrust(token, { secret: `  ${secret}\n`, now });
+  assert.equal(user?.email, "ada@seamlesshome.com");
+});
+
+test("an expiry in milliseconds is accepted", async () => {
+  const expMs = now + 60_000;
+  const token = await signHubTrust({ email: "ada@seamlesshome.com", name: "Ada" }, expMs, secret);
+  const result = await inspectHubTrust(token, { secret, now });
+  assert.equal(result.reason, "ok");
+  assert.equal(result.user?.email, "ada@seamlesshome.com");
+});
+
+test("a missing header is reported without throwing", async () => {
+  const result = await inspectHubTrust(null, { secret, now });
+  assert.equal(result.reason, "no-header");
+  assert.equal(result.user, null);
 });
 
 test("unicode names round-trip", async () => {
