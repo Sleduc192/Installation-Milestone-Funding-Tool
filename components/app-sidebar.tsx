@@ -40,8 +40,7 @@ export default function AppSidebar() {
             <Sun className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-display font-bold text-white tracking-tight">LightReach</h1>
-            <p className="text-[10px] text-amber-400 font-mono tracking-wider">M1 SUBMISSION TOOL</p>
+            <h1 className="text-base font-display font-bold text-white tracking-tight leading-tight">Photopack Reviewer</h1>
           </div>
         </Link>
       </div>

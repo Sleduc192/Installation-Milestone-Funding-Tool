@@ -85,8 +85,7 @@ export default function LoginForm() {
               <Sun className="w-7 h-7 text-white" />
             </div>
             <div className="text-left">
-              <h1 className="text-2xl font-display font-bold text-white tracking-tight">LightReach</h1>
-              <p className="text-xs text-amber-400 font-mono">M1 SUBMISSION TOOL</p>
+              <h1 className="text-2xl font-display font-bold text-white tracking-tight">Photopack Reviewer</h1>
             </div>
           </div>
           <p className="text-blue-200/70 text-sm">AI-powered photo review for solar installation milestones</p>
