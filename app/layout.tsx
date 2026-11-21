@@ -27,14 +27,14 @@ export const metadata = {
   // Include the mount path so /favicon.svg and /og-image.png resolve under it.
   // Next joins metadata paths onto metadataBase and drops a leading slash.
   metadataBase: new URL(`${publicOrigin}/`),
-  title: "LightReach M1 Submission Tool",
+  title: "Photopack Reviewer",
   description: "AI-powered solar installation photo review and submission management",
   icons: {
     icon: "favicon.svg",
     shortcut: "favicon.svg",
   },
   openGraph: {
-    title: "LightReach M1 Submission Tool",
+    title: "Photopack Reviewer",
     description: "AI-powered solar installation photo review and submission management",
     images: ["og-image.png"],
   },
